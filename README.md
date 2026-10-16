@@ -1,6 +1,6 @@
-# 📄 AskPDF-Gemini
+# 📄 Ask Gemini
 
-A fast, lightweight, and local Retrieval-Augmented Generation (RAG) assistant that allows you to chat with any PDF document using **Google Gemini**, **LangChain**, and **ChromaDB**.
+A fast, lightweight, and local Retrieval-Augmented Generation (RAG) assistant that allows you to chat with any PDF document using **Google Gemini**, **LangChain**, and **ChromaDB**. It includes an interactive CLI, a production-ready **FastAPI** backend with CORS, and a stunning **3D animated web interface** powered by **Three.js**.
 
 ---
 
@@ -11,8 +11,10 @@ A fast, lightweight, and local Retrieval-Augmented Generation (RAG) assistant th
 - **Vector Embeddings**: Generates high-dimensional vector embeddings with Google's `models/gemini-embedding-001`.
 - **Local Vector Store**: Persists document vectors locally with **ChromaDB** without requiring external cloud databases.
 - **RAG Pipeline**: Built with LangChain Expression Language (LCEL) integrating retriever, prompt template, and Gemini (`gemini-3.1-flash-lite`).
+- **FastAPI REST API**: High-performance API server with CORS enabled, exposing `/ask` (POST & GET) with pre-warmed chain caching.
+- **Interactive 3D Web UI**: Full-screen 3D animated Three.js background, glassmorphism chat card, real-time bouncing dot "thinking..." animations, and instant responses.
 - **Interactive & CLI Modes**: Supports interactive multi-turn terminal questioning or single-query CLI execution.
-- **Resilient Rate Handling**: Built-in exponential backoff retry for Gemini API free-tier rate limits.
+- **Resilient Rate Handling**: Built-in handling for Gemini API free-tier rate limits.
 
 ---
 
@@ -32,6 +34,10 @@ A fast, lightweight, and local Retrieval-Augmented Generation (RAG) assistant th
                                           │
                                           ▼ (Similarity Search)
 [ User Query ] ──▶ [ Top-k Context Chunks ] ──▶ [ Prompt Template ] ──▶ [ Gemini LLM ] ──▶ [ Grounded Answer ]
+                                                                                                   │
+                                                      ┌────────────────────────────────────────────┴─────────────┐
+                                                      ▼                                                          ▼
+                                             [ FastAPI Server /ask ]                                    [ 3D Web UI (Three.js) ]
 ```
 
 ---
@@ -88,14 +94,46 @@ python ingest.py /path/to/your/document.pdf
 ```
 This extracts text, computes embeddings, and stores them in the local `db/` folder.
 
-### Step 2: Ask Questions
+### Step 2: Choose How to Chat
 
-#### Option A: Single Query CLI
+#### Option A: 3D Interactive Web UI (Recommended)
+Start the server:
 ```bash
-python ask.py "What is a tree and what is a binary tree?"
+python server.py
+```
+Then open **http://localhost:8000/** in your browser to experience the 3D animated Three.js interface, quick starter chips, and real-time streaming Q&A.
+
+*(You can also double-click and open `index.html` directly in any web browser!)*
+
+#### Option B: FastAPI Web Server & REST API
+With `server.py` running, test the `/ask` endpoint:
+
+Interactive Swagger documentation is available at **http://localhost:8000/docs**.
+
+**POST Request:**
+```bash
+curl -X POST http://localhost:8000/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What is a binary tree?"}'
 ```
 
-#### Option B: Interactive Terminal Session
+**GET Request:**
+```bash
+curl "http://localhost:8000/ask?question=What+is+a+tree%3F"
+```
+
+**JavaScript fetch:**
+```javascript
+const response = await fetch("http://localhost:8000/ask", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ question: "What is a binary tree?" })
+});
+const data = await response.json();
+console.log(data.answer);
+```
+
+#### Option C: Interactive Terminal Session
 ```bash
 python ask.py
 ```
@@ -114,6 +152,11 @@ The difference between a full binary tree and a complete binary tree is:
 - Complete binary tree: Every level is completely filled except possibly the last, which is filled from left to right.
 ```
 
+#### Option D: Single Query CLI
+```bash
+python ask.py "What is a tree and what is a binary tree?"
+```
+
 ---
 
 ## 📁 Project Structure
@@ -124,6 +167,8 @@ AskPDF-Gemini/
 ├── .gitignore           # Excludes virtualenv, .env secrets, and local Chroma db
 ├── ask.py               # RAG query engine & interactive QA terminal
 ├── ingest.py            # PDF loader, chunker, and vector store builder
+├── server.py            # FastAPI REST API wrapper with CORS support
+├── index.html           # 3D animated Three.js web UI with glassmorphism chat
 ├── requirements.txt     # Python package dependencies
 ├── pyrightconfig.json   # IDE / Language server configuration
 ├── sample.pdf           # Sample document for indexing

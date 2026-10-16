@@ -27,6 +27,7 @@ try:
     from langchain_text_splitters import RecursiveCharacterTextSplitter
 except ImportError:
     try:
+        # pyrefly: ignore [missing-import]
         from langchain.text_splitter import RecursiveCharacterTextSplitter
     except ImportError:
         print("Error: 'langchain' text splitters not found.")
@@ -46,6 +47,7 @@ try:
     from langchain_community.vectorstores import Chroma
 except ImportError:
     try:
+        # pyrefly: ignore [missing-import]
         from langchain_chroma import Chroma
     except ImportError:
         print("Error: 'chromadb' or 'langchain-community' not installed.")

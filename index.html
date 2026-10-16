@@ -1,0 +1,1126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ask Gemini — 3D RAG Chatbot</title>
+  
+  <!-- Modern Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  
+  <!-- Three.js for 3D animated canvas -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+  <style>
+    :root {
+      --bg-dark: #0a0e17;
+      --card-bg: rgba(15, 23, 42, 0.72);
+      --card-border: rgba(255, 255, 255, 0.12);
+      --card-border-glow: rgba(56, 189, 248, 0.3);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent-cyan: #38bdf8;
+      --accent-blue: #3b82f6;
+      --accent-purple: #a855f7;
+      --accent-emerald: #10b981;
+      --user-bubble: linear-gradient(135deg, #2563eb, #7c3aed);
+      --bot-bubble: rgba(30, 41, 59, 0.75);
+      --bot-border: rgba(255, 255, 255, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    /* 3D Canvas Layer */
+    #canvas3d {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    /* Radial Ambient Glow Overlays */
+    .ambient-glow {
+      position: fixed;
+      width: 600px;
+      height: 600px;
+      border-radius: 50%;
+      filter: blur(140px);
+      pointer-events: none;
+      z-index: 2;
+      opacity: 0.28;
+    }
+    .glow-top-left {
+      top: -150px;
+      left: -150px;
+      background: radial-gradient(circle, #38bdf8, transparent 70%);
+    }
+    .glow-bottom-right {
+      bottom: -150px;
+      right: -150px;
+      background: radial-gradient(circle, #8b5cf6, transparent 70%);
+    }
+
+    /* Main Container */
+    .app-container {
+      position: relative;
+      z-index: 10;
+      width: 92%;
+      max-width: 920px;
+      height: 90vh;
+      display: flex;
+      flex-direction: column;
+      background: var(--card-bg);
+      backdrop-filter: blur(28px) saturate(180%);
+      -webkit-backdrop-filter: blur(28px) saturate(180%);
+      border: 1px solid var(--card-border);
+      border-radius: 24px;
+      box-shadow: 
+        0 25px 60px -15px rgba(0, 0, 0, 0.75),
+        0 0 40px -10px var(--card-border-glow),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+      overflow: hidden;
+      animation: modalFadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes modalFadeIn {
+      0% {
+        opacity: 0;
+        transform: translateY(20px) scale(0.98);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    /* Header */
+    .chat-header {
+      padding: 18px 24px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(15, 23, 42, 0.4);
+    }
+
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .brand-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(168, 85, 247, 0.25));
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 16px rgba(56, 189, 248, 0.25);
+    }
+
+    .brand-icon svg {
+      width: 24px;
+      height: 24px;
+      fill: none;
+      stroke: var(--accent-cyan);
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .brand-details h1 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      background: linear-gradient(90deg, #ffffff, #cbd5e1);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .topic-badge {
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: 20px;
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      color: var(--accent-cyan);
+    }
+
+    .brand-details p {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.04);
+      padding: 6px 12px;
+      border-radius: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .status-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: var(--accent-emerald);
+      box-shadow: 0 0 8px var(--accent-emerald);
+      animation: pulseGreen 2s infinite;
+    }
+
+    @keyframes pulseGreen {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.25); opacity: 0.6; }
+    }
+
+    .clear-btn {
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--text-muted);
+      border-radius: 8px;
+      padding: 6px 10px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.75rem;
+      font-family: inherit;
+      transition: all 0.2s ease;
+    }
+    .clear-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-main);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    /* Chat Messages Viewport */
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      scroll-behavior: smooth;
+    }
+
+    .chat-messages::-webkit-scrollbar {
+      width: 6px;
+    }
+    .chat-messages::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .chat-messages::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 10px;
+    }
+    .chat-messages::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    /* Message Bubbles */
+    .message-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      opacity: 0;
+      transform: translateY(14px);
+      animation: messageFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes messageFadeIn {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .message-row.user {
+      justify-content: flex-end;
+    }
+
+    .avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .avatar-bot {
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(124, 58, 237, 0.3));
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      color: var(--accent-cyan);
+    }
+
+    .message-content {
+      max-width: 80%;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .bubble {
+      padding: 13px 18px;
+      border-radius: 16px;
+      font-size: 0.92rem;
+      line-height: 1.55;
+      word-break: break-word;
+      position: relative;
+    }
+
+    .message-row.user .bubble {
+      background: var(--user-bubble);
+      color: #ffffff;
+      border-bottom-right-radius: 4px;
+      box-shadow: 0 4px 18px rgba(37, 99, 235, 0.3);
+    }
+
+    .message-row.bot .bubble {
+      background: var(--bot-bubble);
+      border: 1px solid var(--bot-border);
+      border-bottom-left-radius: 4px;
+      color: #e2e8f0;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    }
+
+    .bubble code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85em;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 2px 6px;
+      border-radius: 5px;
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.2);
+    }
+
+    .bubble pre {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82em;
+      background: rgba(10, 15, 26, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin: 8px 0;
+      overflow-x: auto;
+      color: #7dd3fc;
+    }
+
+    .bubble ul, .bubble ol {
+      margin-left: 18px;
+      margin-top: 6px;
+      margin-bottom: 6px;
+    }
+
+    .bubble li {
+      margin-bottom: 4px;
+    }
+
+    .message-timestamp {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+      padding: 0 4px;
+    }
+    .message-row.user .message-timestamp {
+      text-align: right;
+    }
+
+    /* Thinking / Typing Animation */
+    .thinking-bubble {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 14px 20px;
+      background: var(--bot-bubble);
+      border: 1px solid var(--bot-border);
+      border-radius: 16px;
+      border-bottom-left-radius: 4px;
+      width: fit-content;
+    }
+
+    .thinking-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background-color: var(--accent-cyan);
+      box-shadow: 0 0 6px var(--accent-cyan);
+      animation: dotBounce 1.4s infinite ease-in-out both;
+    }
+
+    .thinking-dot:nth-child(1) { animation-delay: -0.32s; }
+    .thinking-dot:nth-child(2) { animation-delay: -0.16s; }
+    .thinking-dot:nth-child(3) { animation-delay: 0s; }
+
+    @keyframes dotBounce {
+      0%, 80%, 100% {
+        transform: scale(0.4);
+        opacity: 0.4;
+      }
+      40% {
+        transform: scale(1.1);
+        opacity: 1;
+      }
+    }
+
+    .thinking-text {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-left: 6px;
+      font-style: italic;
+    }
+
+    /* Quick Starter Prompts Chips */
+    .quick-chips-wrapper {
+      padding: 6px 24px 12px 24px;
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .quick-chips-wrapper::-webkit-scrollbar {
+      display: none;
+    }
+
+    .chip-btn {
+      white-space: nowrap;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #94a3b8;
+      border-radius: 20px;
+      padding: 6px 14px;
+      font-size: 0.78rem;
+      font-family: inherit;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.25s ease;
+      flex-shrink: 0;
+    }
+
+    .chip-btn:hover {
+      background: rgba(56, 189, 248, 0.12);
+      border-color: rgba(56, 189, 248, 0.35);
+      color: #ffffff;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(56, 189, 248, 0.15);
+    }
+
+    /* Input Footer */
+    .chat-footer {
+      padding: 16px 24px 20px 24px;
+      background: rgba(15, 23, 42, 0.6);
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .input-form {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(10, 15, 28, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 16px;
+      padding: 6px 8px 6px 18px;
+      transition: all 0.25s ease;
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+
+    .input-form:focus-within {
+      border-color: var(--accent-cyan);
+      box-shadow: 
+        0 0 0 3px rgba(56, 189, 248, 0.2),
+        inset 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+
+    .chat-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #ffffff;
+      font-size: 0.92rem;
+      font-family: inherit;
+      resize: none;
+      max-height: 120px;
+    }
+
+    .chat-input::placeholder {
+      color: #64748b;
+    }
+
+    .send-btn {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      border: none;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+      color: #ffffff;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 4px 14px rgba(56, 189, 248, 0.35);
+      flex-shrink: 0;
+    }
+
+    .send-btn:hover:not(:disabled) {
+      transform: scale(1.05);
+      box-shadow: 0 6px 20px rgba(56, 189, 248, 0.5);
+    }
+
+    .send-btn:active:not(:disabled) {
+      transform: scale(0.96);
+    }
+
+    .send-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      filter: grayscale(0.5);
+    }
+
+    .send-btn svg {
+      width: 18px;
+      height: 18px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2.2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      transform: translateX(1px);
+    }
+
+    .footer-hints {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.7rem;
+      color: #64748b;
+      margin-top: 8px;
+      padding: 0 4px;
+    }
+
+    /* Error Banner */
+    .error-card {
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-size: 0.84rem;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    @media (max-width: 768px) {
+      .app-container {
+        width: 100%;
+        height: 100vh;
+        border-radius: 0;
+        border: none;
+      }
+      .brand-details h1 {
+        font-size: 1rem;
+      }
+      .topic-badge {
+        display: none;
+      }
+      .message-content {
+        max-width: 88%;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Background 3D Canvas -->
+  <canvas id="canvas3d"></canvas>
+
+  <!-- Ambient Light Blurs -->
+  <div class="ambient-glow glow-top-left"></div>
+  <div class="ambient-glow glow-bottom-right"></div>
+
+  <!-- Centered Glassmorphic Chat App -->
+  <main class="app-container" id="appContainer">
+    
+    <!-- Header -->
+    <header class="chat-header">
+      <div class="header-brand">
+        <div class="brand-icon">
+          <!-- Binary Tree SVG -->
+          <svg viewBox="0 0 24 24">
+            <circle cx="12" cy="5" r="2.5" />
+            <circle cx="6" cy="18" r="2" />
+            <circle cx="18" cy="18" r="2" />
+            <path d="M12 7.5v4M12 11.5L6 16M12 11.5L18 16" />
+          </svg>
+        </div>
+        <div class="brand-details">
+          <h1>
+            Ask Gemini
+            <span class="topic-badge">3D RAG Chatbot</span>
+          </h1>
+          <p>Powered by Google Gemini, LangChain &amp; ChromaDB</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <div class="status-pill" id="statusPill">
+          <span class="status-indicator"></span>
+          <span id="statusText">RAG Connected</span>
+        </div>
+        <button class="clear-btn" id="clearBtn" title="Clear conversation history">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          </svg>
+          Clear
+        </button>
+      </div>
+    </header>
+
+    <!-- Chat Messages Viewport -->
+    <section class="chat-messages" id="chatMessages">
+      
+      <!-- Welcome Message from Assistant -->
+      <div class="message-row bot" id="welcomeMessage">
+        <div class="avatar avatar-bot">
+          ✨
+        </div>
+        <div class="message-content">
+          <div class="bubble">
+            <strong>Welcome to Ask Gemini!</strong> 👋
+            <br><br>
+            I am your dedicated RAG chatbot assistant. My knowledge is grounded directly in your ingested PDF document.
+            <br><br>
+            Ask me anything about:
+            <ul>
+              <li>Binary tree definitions, root/leaf nodes, and edge rules</li>
+              <li>Full vs. Complete vs. Balanced binary trees</li>
+              <li>Recursive traversals (In-order, Pre-order, Post-order, Level-order)</li>
+              <li>Recursive traversal templates and code patterns</li>
+            </ul>
+          </div>
+          <span class="message-timestamp">Just now</span>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- Quick Starter Chips -->
+    <div class="quick-chips-wrapper" id="quickChips">
+      <button class="chip-btn" data-query="What is a binary tree?">
+        🌲 What is a binary tree?
+      </button>
+      <button class="chip-btn" data-query="What is the difference between a full and complete tree?">
+        ⚖️ Full vs. Complete tree?
+      </button>
+      <button class="chip-btn" data-query="Explain pre-order, in-order, and post-order traversals.">
+        🔄 Tree traversals explained
+      </button>
+      <button class="chip-btn" data-query="What are the three rules that govern a tree structure?">
+        📜 Three rules of a tree
+      </button>
+    </div>
+
+    <!-- Input Footer -->
+    <footer class="chat-footer">
+      <form class="input-form" id="chatForm">
+        <input 
+          type="text" 
+          id="questionInput" 
+          class="chat-input" 
+          placeholder="Ask a question about binary trees... (Press Enter to send)" 
+          autocomplete="off"
+          required
+        />
+        <button type="submit" id="sendBtn" class="send-btn" title="Send question">
+          <svg viewBox="0 0 24 24">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+        </button>
+      </form>
+      <div class="footer-hints">
+        <span>API Target: <code>http://localhost:8000/ask</code></span>
+        <span>Enter to send</span>
+      </div>
+    </footer>
+
+  </main>
+
+  <!-- Embedded JavaScript: 3D Scene + Chat Client Logic -->
+  <script>
+    /* ================================================================
+       1. THREE.JS 3D ANIMATED BACKGROUND (Branching 3D Binary Tree)
+       ================================================================ */
+    (function initThreeBackground() {
+      const canvas = document.getElementById('canvas3d');
+      if (!canvas || typeof THREE === 'undefined') return;
+
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera.position.z = 45;
+      camera.position.y = -2;
+
+      const renderer = new THREE.WebGLRenderer({
+        canvas: canvas,
+        alpha: true,
+        antialias: true,
+      });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+
+      // Group holding the 3D tree
+      const treeGroup = new THREE.Group();
+      scene.add(treeGroup);
+
+      // Geometries & Materials for nodes & branches
+      const nodeGeometry = new THREE.SphereGeometry(0.7, 16, 16);
+      const leafGeometry = new THREE.SphereGeometry(0.5, 12, 12);
+      
+      const rootMaterial = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+      const nodeMaterial = new THREE.MeshBasicMaterial({ color: 0x60a5fa });
+      const leafMaterial = new THREE.MeshBasicMaterial({ color: 0xa855f7 });
+      const branchMaterial = new THREE.LineBasicMaterial({ 
+        color: 0x334155, 
+        transparent: true, 
+        opacity: 0.75 
+      });
+
+      // Recursive function to generate a 3D Binary Tree
+      function createBinaryTree(x, y, z, depth, maxDepth, angleX, angleZ) {
+        if (depth > maxDepth) return;
+
+        // Create spherical node
+        let mat = nodeMaterial;
+        let geom = nodeGeometry;
+        if (depth === 0) mat = rootMaterial;
+        else if (depth === maxDepth) {
+          mat = leafMaterial;
+          geom = leafGeometry;
+        }
+
+        const mesh = new THREE.Mesh(geom, mat);
+        mesh.position.set(x, y, z);
+        treeGroup.add(mesh);
+
+        if (depth < maxDepth) {
+          const spread = Math.pow(0.55, depth) * 16;
+          const branchLength = 6.2;
+
+          // Left child
+          const leftX = x - spread;
+          const leftY = y - branchLength;
+          const leftZ = z + (Math.sin(angleZ) * 4);
+
+          // Right child
+          const rightX = x + spread;
+          const rightY = y - branchLength;
+          const rightZ = z - (Math.sin(angleZ) * 4);
+
+          // Connect with lines (branches)
+          const leftLineGeom = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(x, y, z),
+            new THREE.Vector3(leftX, leftY, leftZ)
+          ]);
+          treeGroup.add(new THREE.Line(leftLineGeom, branchMaterial));
+
+          const rightLineGeom = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(x, y, z),
+            new THREE.Vector3(rightX, rightY, rightZ)
+          ]);
+          treeGroup.add(new THREE.Line(rightLineGeom, branchMaterial));
+
+          // Recurse down
+          createBinaryTree(leftX, leftY, leftZ, depth + 1, maxDepth, angleX + 0.4, angleZ + 0.5);
+          createBinaryTree(rightX, rightY, rightZ, depth + 1, maxDepth, angleX - 0.4, angleZ - 0.5);
+        }
+      }
+
+      // Build 5-level binary tree
+      createBinaryTree(0, 16, 0, 0, 4, 0, 0);
+
+      // Add Floating Ambient Star Dust Particles
+      const particleCount = 200;
+      const particlePositions = new Float32Array(particleCount * 3);
+      for (let i = 0; i < particleCount * 3; i += 3) {
+        particlePositions[i] = (Math.random() - 0.5) * 120;
+        particlePositions[i + 1] = (Math.random() - 0.5) * 80;
+        particlePositions[i + 2] = (Math.random() - 0.5) * 80;
+      }
+      const particleGeom = new THREE.BufferGeometry();
+      particleGeom.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+      const particleMat = new THREE.PointsMaterial({
+        color: 0x38bdf8,
+        size: 0.65,
+        transparent: true,
+        opacity: 0.5,
+      });
+      const particles = new THREE.Points(particleGeom, particleMat);
+      scene.add(particles);
+
+      // Mouse Parallax movement
+      let mouseX = 0;
+      let mouseY = 0;
+      let targetX = 0;
+      let targetY = 0;
+      window.addEventListener('mousemove', (e) => {
+        mouseX = (e.clientX - window.innerWidth / 2) / 100;
+        mouseY = (e.clientY - window.innerHeight / 2) / 100;
+      });
+
+      // Resize listener
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+
+      // Animation Loop
+      let clock = new THREE.Clock();
+      function animate() {
+        requestAnimationFrame(animate);
+        const elapsedTime = clock.getElapsedTime();
+
+        // Slow 3D rotation of the tree
+        treeGroup.rotation.y = Math.sin(elapsedTime * 0.25) * 0.4;
+        treeGroup.rotation.x = Math.cos(elapsedTime * 0.2) * 0.15 + 0.1;
+
+        // Subtle floating particle rotation
+        particles.rotation.y = elapsedTime * 0.03;
+        particles.rotation.x = elapsedTime * 0.02;
+
+        // Smooth camera parallax
+        targetX += (mouseX - targetX) * 0.04;
+        targetY += (mouseY - targetY) * 0.04;
+        camera.position.x = targetX * 0.6;
+        camera.position.y = -2 - targetY * 0.4;
+        camera.lookAt(0, -2, 0);
+
+        renderer.render(scene, camera);
+      }
+      animate();
+    })();
+
+
+    /* ================================================================
+       2. CHATBOT CLIENT LOGIC & FASTAPI INTEGRATION
+       ================================================================ */
+    const API_ENDPOINT = 'http://localhost:8000/ask';
+
+    const chatMessages = document.getElementById('chatMessages');
+    const chatForm = document.getElementById('chatForm');
+    const questionInput = document.getElementById('questionInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const quickChips = document.getElementById('quickChips');
+    const statusText = document.getElementById('statusText');
+    const statusPill = document.getElementById('statusPill');
+
+    // Format current time (HH:MM AM/PM)
+    function getTimeString() {
+      const now = new Date();
+      return now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    // Scroll chat smoothly to bottom
+    function scrollToBottom() {
+      chatMessages.scrollTo({
+        top: chatMessages.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+
+    // Basic markdown formatting parser for answers
+    function formatMarkdown(text) {
+      if (!text) return '';
+      let escaped = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+      // Code blocks ```code```
+      escaped = escaped.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+      
+      // Inline `code`
+      escaped = escaped.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+      // Bold **text**
+      escaped = escaped.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+      // Bullet points
+      const lines = escaped.split('\n');
+      let inList = false;
+      let result = [];
+
+      for (let line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+          if (!inList) {
+            result.push('<ul>');
+            inList = true;
+          }
+          result.push(`<li>${trimmed.substring(2)}</li>`);
+        } else {
+          if (inList) {
+            result.push('</ul>');
+            inList = false;
+          }
+          result.push(line);
+        }
+      }
+      if (inList) result.push('</ul>');
+
+      return result.join('<br>').replace(/<br><pre>/g, '<pre>').replace(/<\/pre><br>/g, '</pre>').replace(/<br><ul>/g, '<ul>').replace(/<\/ul><br>/g, '</ul>');
+    }
+
+    // Append User Message to UI
+    function appendUserMessage(text) {
+      const row = document.createElement('div');
+      row.className = 'message-row user';
+
+      const content = document.createElement('div');
+      content.className = 'message-content';
+
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.textContent = text;
+
+      const time = document.createElement('span');
+      time.className = 'message-timestamp';
+      time.textContent = getTimeString();
+
+      content.appendChild(bubble);
+      content.appendChild(time);
+      row.appendChild(content);
+
+      chatMessages.appendChild(row);
+      scrollToBottom();
+    }
+
+    // Append Assistant Message to UI
+    function appendBotMessage(htmlContent) {
+      const row = document.createElement('div');
+      row.className = 'message-row bot';
+
+      const avatar = document.createElement('div');
+      avatar.className = 'avatar avatar-bot';
+      avatar.innerHTML = '🌲';
+
+      const content = document.createElement('div');
+      content.className = 'message-content';
+
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.innerHTML = htmlContent;
+
+      const time = document.createElement('span');
+      time.className = 'message-timestamp';
+      time.textContent = getTimeString();
+
+      content.appendChild(bubble);
+      content.appendChild(time);
+      row.appendChild(avatar);
+      row.appendChild(content);
+
+      chatMessages.appendChild(row);
+      scrollToBottom();
+    }
+
+    // Show "Thinking..." Bouncing Dots
+    let currentThinkingRow = null;
+    function showThinkingIndicator() {
+      removeThinkingIndicator();
+
+      const row = document.createElement('div');
+      row.className = 'message-row bot';
+      row.id = 'thinkingIndicator';
+
+      const avatar = document.createElement('div');
+      avatar.className = 'avatar avatar-bot';
+      avatar.innerHTML = '🌲';
+
+      const content = document.createElement('div');
+      content.className = 'message-content';
+
+      const bubble = document.createElement('div');
+      bubble.className = 'thinking-bubble';
+      bubble.innerHTML = `
+        <div class="thinking-dot"></div>
+        <div class="thinking-dot"></div>
+        <div class="thinking-dot"></div>
+        <span class="thinking-text">Searching document &amp; thinking...</span>
+      `;
+
+      content.appendChild(bubble);
+      row.appendChild(avatar);
+      row.appendChild(content);
+
+      chatMessages.appendChild(row);
+      currentThinkingRow = row;
+      scrollToBottom();
+    }
+
+    // Remove "Thinking..." Indicator
+    function removeThinkingIndicator() {
+      if (currentThinkingRow && currentThinkingRow.parentNode) {
+        currentThinkingRow.parentNode.removeChild(currentThinkingRow);
+      }
+      currentThinkingRow = null;
+    }
+
+    // Send Question to FastAPI Server
+    async function handleSendQuestion(questionText) {
+      const query = questionText.trim();
+      if (!query) return;
+
+      // Disable inputs while waiting
+      questionInput.value = '';
+      questionInput.disabled = true;
+      sendBtn.disabled = true;
+
+      // 1. Render User message
+      appendUserMessage(query);
+
+      // 2. Render Thinking indicator
+      showThinkingIndicator();
+
+      try {
+        // 3. Make POST request to FastAPI /ask endpoint
+        const response = await fetch(API_ENDPOINT, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ question: query }),
+        });
+
+        removeThinkingIndicator();
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          const detail = errorData.detail || `Server returned status ${response.status}`;
+          appendBotMessage(`
+            <div class="error-card">
+              <span>⚠️</span>
+              <div>
+                <strong>Error from RAG Server:</strong><br>${detail}
+              </div>
+            </div>
+          `);
+          return;
+        }
+
+        const data = await response.json();
+        const answer = data.answer || "No answer received.";
+
+        // 4. Render Answer
+        appendBotMessage(formatMarkdown(answer));
+        statusText.textContent = "RAG Connected";
+
+      } catch (err) {
+        removeThinkingIndicator();
+        console.error("Fetch error:", err);
+        statusText.textContent = "Offline / Connection Error";
+
+        appendBotMessage(`
+          <div class="error-card">
+            <span>⚠️</span>
+            <div>
+              <strong>Could not reach RAG Server at <code>${API_ENDPOINT}</code></strong><br><br>
+              Make sure your FastAPI server is currently running in your terminal:
+              <pre><code>python server.py</code></pre>
+            </div>
+          </div>
+        `);
+      } finally {
+        questionInput.disabled = false;
+        sendBtn.disabled = false;
+        questionInput.focus();
+      }
+    }
+
+    // Form Submit Event Listener
+    chatForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      handleSendQuestion(questionInput.value);
+    });
+
+    // Quick Starter Chips Click Listener
+    quickChips.addEventListener('click', (e) => {
+      const chip = e.target.closest('.chip-btn');
+      if (chip && chip.dataset.query) {
+        handleSendQuestion(chip.dataset.query);
+      }
+    });
+
+    // Clear Chat Button Listener
+    clearBtn.addEventListener('click', () => {
+      chatMessages.innerHTML = `
+        <div class="message-row bot" id="welcomeMessage">
+          <div class="avatar avatar-bot">🌲</div>
+          <div class="message-content">
+            <div class="bubble">
+              <strong>Conversation cleared.</strong> What question do you have about binary trees?
+            </div>
+            <span class="message-timestamp">Just now</span>
+          </div>
+        </div>
+      `;
+    });
+
+    // Focus input on initial page load
+    window.addEventListener('DOMContentLoaded', () => {
+      questionInput.focus();
+    });
+  </script>
+</body>
+</html>
